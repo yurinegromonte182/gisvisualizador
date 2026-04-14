@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visualizador de Shapefile</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #f4f4f4;
+    }
+
+    #app {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      width: 100%;
+      height: 100%;
+    }
+
+    #sidebar {
+      background: #ffffff;
+      border-right: 1px solid #ddd;
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    #sidebar h1 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    #sidebar p {
+      font-size: 14px;
+      color: #444;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+
+    .card {
+      border: 1px solid #e3e3e3;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: #fafafa;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      border: none;
+      background: #1f6feb;
+      color: white;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+
+    button:hover {
+      background: #1558be;
+    }
+
+    button.secondary {
+      background: #666;
+    }
+
+    button.secondary:hover {
+      background: #4f4f4f;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    #status {
+      font-size: 13px;
+      color: #333;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    #attributes {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #222;
+      word-break: break-word;
+    }
+
+    #attributes table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+    }
+
+    #attributes th,
+    #attributes td {
+      text-align: left;
+      border: 1px solid #ddd;
+      padding: 6px;
+      vertical-align: top;
+      font-size: 12px;
+    }
+
+    .small {
+      font-size: 12px;
+      color: #666;
+    }
+
+    @media (max-width: 900px) {
+      #app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+
+      #sidebar {
+        max-height: 42vh;
+        border-right: none;
+        border-bottom: 1px solid #ddd;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <h1>Visualizador de Shapefile</h1>
+      <p>
+        Carregue um shapefile compactado em <strong>.zip</strong>. O mapa base usa
+        <strong>OpenStreetMap</strong>.
+      </p>
+
+      <div class="card">
+        <label for="fileInput">Arquivo ZIP do shapefile</label>
+        <input type="file" id="fileInput" accept=".zip" />
+        <button id="loadBtn">Carregar shapefile</button>
+        <button id="clearBtn" class="secondary">Limpar camada</button>
+        <p class="small" style="margin-top: 10px;">
+          Dica: compacte juntos os arquivos do shapefile, como <code>.shp</code>,
+          <code>.dbf</code>, <code>.shx</code> e <code>.prj</code>.
+        </p>
+      </div>
+
+      <div class="card">
+        <strong>Status</strong>
+        <div id="status" style="margin-top: 8px;">Aguardando arquivo...</div>
+      </div>
+
+      <div class="card">
+        <strong>Atributos da feição</strong>
+        <div id="attributes" style="margin-top: 8px;">Clique em uma feição no mapa.</div>
+      </div>
+    </aside>
+
+    <main id="map"></main>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
+
+  <script>
+    const map = L.map('map').setView([-14.235, -51.9253], 4);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let currentLayer = null;
+
+    const fileInput = document.getElementById('fileInput');
+    const loadBtn = document.getElementById('loadBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusEl = document.getElementById('status');
+    const attributesEl = document.getElementById('attributes');
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function clearAttributes() {
+      attributesEl.innerHTML = 'Clique em uma feição no mapa.';
+    }
+
+    function renderProperties(properties) {
+      const entries = Object.entries(properties || {});
+
+      if (!entries.length) {
+        attributesEl.innerHTML = 'Esta feição não possui atributos.';
+        return;
+      }
+
+      let html = '<table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>';
+      for (const [key, value] of entries) {
+        html += `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(String(value ?? ''))}</td></tr>`;
+      }
+      html += '</tbody></table>';
+      attributesEl.innerHTML = html;
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function getStyle(geometryType) {
+      switch (geometryType) {
+        case 'Polygon':
+        case 'MultiPolygon':
+          return {
+            color: '#ff7800',
+            weight: 2,
+            fillOpacity: 0.35
+          };
+        case 'LineString':
+        case 'MultiLineString':
+          return {
+            color: '#0055ff',
+            weight: 3
+          };
+        default:
+          return {
+            color: '#d11',
+            weight: 2
+          };
+      }
+    }
+
+    function pointToLayer(feature, latlng) {
+      return L.circleMarker(latlng, {
+        radius: 6,
+        fillColor: '#e63946',
+        color: '#8d1b24',
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.85
+      });
+    }
+
+    function onEachFeature(feature, layer) {
+      layer.on('click', () => {
+        renderProperties(feature.properties);
+      });
+
+      const props = feature.properties || {};
+      const preview = Object.entries(props)
+        .slice(0, 4)
+        .map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v ?? ''))}`)
+        .join('<br>');
+
+      if (preview) {
+        layer.bindPopup(preview);
+      }
+    }
+
+    async function loadShapefile() {
+      const file = fileInput.files[0];
+
+      if (!file) {
+        setStatus('Selecione um arquivo .zip primeiro.');
+        return;
+      }
+
+      clearAttributes();
+      setStatus('Lendo arquivo...');
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const geojson = await shp(arrayBuffer);
+
+        if (currentLayer) {
+          map.removeLayer(currentLayer);
+        }
+
+        currentLayer = L.geoJSON(geojson, {
+          style: feature => getStyle(feature.geometry?.type),
+          pointToLayer,
+          onEachFeature
+        }).addTo(map);
+
+        const bounds = currentLayer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [20, 20] });
+        }
+
+        const featureCount = countFeatures(geojson);
+        setStatus(`Shapefile carregado com sucesso.\nFeições: ${featureCount}`);
+      } catch (error) {
+        console.error(error);
+        setStatus('Erro ao carregar o shapefile. Verifique se o ZIP está correto e contém os arquivos necessários.');
+      }
+    }
+
+    function countFeatures(geojson) {
+      if (Array.isArray(geojson)) {
+        return geojson.reduce((sum, item) => sum + (item.features ? item.features.length : 0), 0);
+      }
+      return geojson.features ? geojson.features.length : 0;
+    }
+
+    function clearLayer() {
+      if (currentLayer) {
+        map.removeLayer(currentLayer);
+        currentLayer = null;
+      }
+      fileInput.value = '';
+      clearAttributes();
+      setStatus('Camada removida.');
+    }
+
+    loadBtn.addEventListener('click', loadShapefile);
+    clearBtn.addEventListener('click', clearLayer);
+  </script>
+</body>
+</html>
