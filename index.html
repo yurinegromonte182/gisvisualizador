@@ -1,352 +1,215 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Visualizador de Shapefile</title>
-
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #f4f4f4;
-    }
-
-    #app {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      width: 100%;
-      height: 100%;
-    }
-
-    #sidebar {
-      background: #ffffff;
-      border-right: 1px solid #ddd;
-      padding: 16px;
-      overflow-y: auto;
-    }
-
-    #sidebar h1 {
-      font-size: 20px;
-      margin-bottom: 8px;
-    }
-
-    #sidebar p {
-      font-size: 14px;
-      color: #444;
-      line-height: 1.4;
-      margin-bottom: 12px;
-    }
-
-    .card {
-      border: 1px solid #e3e3e3;
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 12px;
-      background: #fafafa;
-    }
-
-    label {
-      display: block;
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    input[type="file"] {
-      width: 100%;
-      font-size: 14px;
-    }
-
-    button {
-      width: 100%;
-      border: none;
-      background: #1f6feb;
-      color: white;
-      padding: 10px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      margin-top: 8px;
-    }
-
-    button:hover {
-      background: #1558be;
-    }
-
-    button.secondary {
-      background: #666;
-    }
-
-    button.secondary:hover {
-      background: #4f4f4f;
-    }
-
-    #map {
-      width: 100%;
-      height: 100%;
-    }
-
-    #status {
-      font-size: 13px;
-      color: #333;
-      line-height: 1.5;
-      white-space: pre-line;
-    }
-
-    #attributes {
-      font-size: 13px;
-      line-height: 1.5;
-      color: #222;
-      word-break: break-word;
-    }
-
-    #attributes table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 6px;
-    }
-
-    #attributes th,
-    #attributes td {
-      text-align: left;
-      border: 1px solid #ddd;
-      padding: 6px;
-      vertical-align: top;
-      font-size: 12px;
-    }
-
-    .small {
-      font-size: 12px;
-      color: #666;
-    }
-
-    @media (max-width: 900px) {
-      #app {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
-      }
-
-      #sidebar {
-        max-height: 42vh;
-        border-right: none;
-        border-bottom: 1px solid #ddd;
-      }
-    }
-  </style>
+<meta charset="utf-8">
+<title>Visualizador de Shapefile com Camadas</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"/>
+<style>
+  body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  #toolbar {
+    padding: 8px;
+    background: #f8f8f8;
+    border-bottom: 1px solid #ccc;
+  }
+  #map {
+    height: calc(100vh - 120px);
+    width: 100%;
+  }
+  #attribute-table {
+    display: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 40vh;
+    overflow: auto;
+    background: #fff;
+    border-top: 1px solid #ccc;
+    z-index: 999;
+  }
+  #attribute-table table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  #attribute-table th, #attribute-table td {
+    border: 1px solid #ddd;
+    padding: 4px;
+    font-size: 12px;
+    text-align: left;
+  }
+  #attribute-table th {
+    background: #f0f0f0;
+  }
+</style>
 </head>
 <body>
-  <div id="app">
-    <aside id="sidebar">
-      <h1>Visualizador de Shapefile</h1>
-      <p>
-        Carregue um shapefile compactado em <strong>.zip</strong>. O mapa base usa
-        <strong>OpenStreetMap</strong>.
-      </p>
-
-      <div class="card">
-        <label for="fileInput">Arquivo ZIP do shapefile</label>
-        <input type="file" id="fileInput" accept=".zip" />
-        <button id="loadBtn">Carregar shapefile</button>
-        <button id="clearBtn" class="secondary">Limpar camada</button>
-        <p class="small" style="margin-top: 10px;">
-          Dica: compacte juntos os arquivos do shapefile, como <code>.shp</code>,
-          <code>.dbf</code>, <code>.shx</code> e <code>.prj</code>.
-        </p>
-      </div>
-
-      <div class="card">
-        <strong>Status</strong>
-        <div id="status" style="margin-top: 8px;">Aguardando arquivo...</div>
-      </div>
-
-      <div class="card">
-        <strong>Atributos da feição</strong>
-        <div id="attributes" style="margin-top: 8px;">Clique em uma feição no mapa.</div>
-      </div>
-    </aside>
-
-    <main id="map"></main>
+  <div id="toolbar">
+    <input type="file" id="shapefile-input" accept=".zip" />
+    <button id="toggle-table">Mostrar Tabela de Atributos</button>
   </div>
+  <div id="map"></div>
+  <div id="attribute-table"></div>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
-  <script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
-
+  <!-- Bibliotecas -->
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/shapefile@0.6.6"></script>
+  <script src="https://unpkg.com/jszip@3.7.1/dist/jszip.min.js"></script>
   <script>
-    const map = L.map('map').setView([-14.235, -51.9253], 4);
+    // Inicialização do mapa com um centro padrão
+    var map = L.map('map').setView([0, 0], 2);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Camadas base
+    var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '© Contribuidores do OpenStreetMap'
     }).addTo(map);
 
-    let currentLayer = null;
+    var osmHOT = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© Contribuidores do OpenStreetMap | Tiles estilo HOT'
+    });
 
-    const fileInput = document.getElementById('fileInput');
-    const loadBtn = document.getElementById('loadBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const statusEl = document.getElementById('status');
-    const attributesEl = document.getElementById('attributes');
+    // Objeto de camadas base e de sobreposição (overlays)
+    var baseLayers = {
+      "OpenStreetMap": osm,
+      "OpenStreetMap HOT": osmHOT
+    };
 
-    function setStatus(message) {
-      statusEl.textContent = message;
-    }
+    var overlays = {};
 
-    function clearAttributes() {
-      attributesEl.innerHTML = 'Clique em uma feição no mapa.';
-    }
+    // Controle de camadas (camadas base e sobreposições)
+    var layersControl = L.control.layers(baseLayers, overlays).addTo(map);
 
-    function renderProperties(properties) {
-      const entries = Object.entries(properties || {});
+    var shapefileLayer;        // Layer atual do shapefile
+    var attributeData = [];    // Armazena dados de atributos
+    var tableVisible = false;  // Controle de visibilidade da tabela
 
-      if (!entries.length) {
-        attributesEl.innerHTML = 'Esta feição não possui atributos.';
-        return;
-      }
+    // Manipulador de input de shapefile
+    document.getElementById('shapefile-input').addEventListener('change', function(evt) {
+      var file = evt.target.files[0];
+      if (!file) return;
 
-      let html = '<table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>';
-      for (const [key, value] of entries) {
-        html += `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(String(value ?? ''))}</td></tr>`;
-      }
-      html += '</tbody></table>';
-      attributesEl.innerHTML = html;
-    }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        JSZip.loadAsync(e.target.result).then(function(zip) {
+          var shpPromise, dbfPromise;
+          zip.forEach(function (relativePath, zipEntry) {
+            if (relativePath.endsWith('.shp')) {
+              shpPromise = zipEntry.async('arraybuffer');
+            } else if (relativePath.endsWith('.dbf')) {
+              dbfPromise = zipEntry.async('arraybuffer');
+            }
+          });
+          return Promise.all([shpPromise, dbfPromise]);
+        }).then(function(results) {
+          var shpArrayBuffer = results[0];
+          var dbfArrayBuffer = results[1];
+          // Abre o shapefile
+          shapefile.open(shpArrayBuffer, dbfArrayBuffer).then(function(source) {
+            // Remove camada existente, se houver
+            if (shapefileLayer) {
+              map.removeLayer(shapefileLayer);
+              layersControl.removeLayer(shapefileLayer);
+            }
+            attributeData = [];
+            var geojsonFeatureCollection = {
+              type: "FeatureCollection",
+              features: []
+            };
+            return source.read().then(function log(result) {
+              if (result.done) {
+                // Cria camada GeoJSON com o shapefile
+                shapefileLayer = L.geoJSON(geojsonFeatureCollection, {
+                  onEachFeature: function(feature, layer) {
+                    // Popup exibindo os atributos ao clicar
+                    layer.on('click', function() {
+                      var popupContent = '';
+                      Object.keys(feature.properties).forEach(function(key) {
+                        popupContent += '<strong>' + key + '</strong>: ' + feature.properties[key] + '<br>';
+                      });
+                      layer.bindPopup(popupContent).openPopup();
+                    });
+                  },
+                  style: function(feature) {
+                    return { color: 'blue', weight: 2, fillOpacity: 0.4 };
+                  }
+                }).addTo(map);
 
-    function escapeHtml(text) {
-      return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
+                // Adiciona a camada ao controle de camadas
+                overlays[file.name] = shapefileLayer;
+                layersControl.addOverlay(shapefileLayer, file.name);
 
-    function getStyle(geometryType) {
-      switch (geometryType) {
-        case 'Polygon':
-        case 'MultiPolygon':
-          return {
-            color: '#ff7800',
-            weight: 2,
-            fillOpacity: 0.35
-          };
-        case 'LineString':
-        case 'MultiLineString':
-          return {
-            color: '#0055ff',
-            weight: 3
-          };
-        default:
-          return {
-            color: '#d11',
-            weight: 2
-          };
-      }
-    }
+                // Ajusta a visualização para abranger a camada
+                map.fitBounds(shapefileLayer.getBounds());
 
-    function pointToLayer(feature, latlng) {
-      return L.circleMarker(latlng, {
-        radius: 6,
-        fillColor: '#e63946',
-        color: '#8d1b24',
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.85
+                // Constrói a tabela de atributos
+                buildAttributeTable();
+                return;
+              }
+              // Coleta feature e seus atributos
+              geojsonFeatureCollection.features.push(result.value);
+              attributeData.push(result.value.properties);
+              return source.read().then(log);
+            });
+          });
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // Constrói a tabela de atributos
+    function buildAttributeTable() {
+      var container = document.getElementById('attribute-table');
+      container.innerHTML = '';
+      if (attributeData.length === 0) return;
+
+      // Determina todas as colunas únicas
+      var columns = new Set();
+      attributeData.forEach(function(attrs) {
+        Object.keys(attrs).forEach(function(key) {
+          columns.add(key);
+        });
       });
-    }
+      var colArray = Array.from(columns);
 
-    function onEachFeature(feature, layer) {
-      layer.on('click', () => {
-        renderProperties(feature.properties);
+      // Cria a tabela
+      var table = document.createElement('table');
+      var thead = document.createElement('thead');
+      var headRow = document.createElement('tr');
+      colArray.forEach(function(col) {
+        var th = document.createElement('th');
+        th.textContent = col;
+        headRow.appendChild(th);
       });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
 
-      const props = feature.properties || {};
-      const preview = Object.entries(props)
-        .slice(0, 4)
-        .map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v ?? ''))}`)
-        .join('<br>');
-
-      if (preview) {
-        layer.bindPopup(preview);
-      }
+      var tbody = document.createElement('tbody');
+      attributeData.forEach(function(attrs) {
+        var tr = document.createElement('tr');
+        colArray.forEach(function(col) {
+          var td = document.createElement('td');
+          td.textContent = attrs[col] !== undefined ? attrs[col] : '';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      container.appendChild(table);
     }
 
-    async function loadShapefile() {
-      const file = fileInput.files[0];
-
-      if (!file) {
-        setStatus('Selecione um arquivo .zip primeiro.');
-        return;
+    // Botão para mostrar/ocultar a tabela de atributos
+    document.getElementById('toggle-table').addEventListener('click', function() {
+      var container = document.getElementById('attribute-table');
+      tableVisible = !tableVisible;
+      if (tableVisible) {
+        container.style.display = 'block';
+        this.textContent = 'Ocultar Tabela de Atributos';
+      } else {
+        container.style.display = 'none';
+        this.textContent = 'Mostrar Tabela de Atributos';
       }
-
-      clearAttributes();
-      setStatus('Lendo arquivo...');
-
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const geojson = await shp(arrayBuffer);
-
-        if (currentLayer) {
-          map.removeLayer(currentLayer);
-        }
-
-        currentLayer = L.geoJSON(geojson, {
-          style: feature => getStyle(feature.geometry?.type),
-          pointToLayer,
-          onEachFeature
-        }).addTo(map);
-
-        const bounds = currentLayer.getBounds();
-        if (bounds.isValid()) {
-          map.fitBounds(bounds, { padding: [20, 20] });
-        }
-
-        const featureCount = countFeatures(geojson);
-        setStatus(`Shapefile carregado com sucesso.\nFeições: ${featureCount}`);
-      } catch (error) {
-        console.error(error);
-        setStatus('Erro ao carregar o shapefile. Verifique se o ZIP está correto e contém os arquivos necessários.');
-      }
-    }
-
-    function countFeatures(geojson) {
-      if (Array.isArray(geojson)) {
-        return geojson.reduce((sum, item) => sum + (item.features ? item.features.length : 0), 0);
-      }
-      return geojson.features ? geojson.features.length : 0;
-    }
-
-    function clearLayer() {
-      if (currentLayer) {
-        map.removeLayer(currentLayer);
-        currentLayer = null;
-      }
-      fileInput.value = '';
-      clearAttributes();
-      setStatus('Camada removida.');
-    }
-
-    loadBtn.addEventListener('click', loadShapefile);
-    clearBtn.addEventListener('click', clearLayer);
+    });
   </script>
 </body>
 </html>
