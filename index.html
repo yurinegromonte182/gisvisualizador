@@ -1,352 +1,633 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Visualizador de Shapefile</title>
+  <title>GIS Web - Shapefile Viewer</title>
 
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
   />
 
   <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #dcdfe4;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+      --ok: #16a34a;
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      --radius: 14px;
+    }
+
     * {
       box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: Arial, Helvetica, sans-serif;
     }
 
     html, body {
-      width: 100%;
+      margin: 0;
       height: 100%;
-      overflow: hidden;
-      background: #f4f4f4;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
     }
 
-    #app {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      width: 100%;
-      height: 100%;
+    body {
+      display: flex;
+      flex-direction: column;
     }
 
-    #sidebar {
-      background: #ffffff;
-      border-right: 1px solid #ddd;
-      padding: 16px;
-      overflow-y: auto;
-    }
-
-    #sidebar h1 {
-      font-size: 20px;
-      margin-bottom: 8px;
-    }
-
-    #sidebar p {
-      font-size: 14px;
-      color: #444;
-      line-height: 1.4;
-      margin-bottom: 12px;
-    }
-
-    .card {
-      border: 1px solid #e3e3e3;
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 12px;
-      background: #fafafa;
-    }
-
-    label {
-      display: block;
-      font-size: 13px;
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    input[type="file"] {
-      width: 100%;
-      font-size: 14px;
-    }
-
-    button {
-      width: 100%;
-      border: none;
-      background: #1f6feb;
-      color: white;
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
       padding: 10px 12px;
-      border-radius: 8px;
-      cursor: pointer;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      z-index: 1000;
+    }
+
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-right: 10px;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .btn,
+    .select {
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 0 12px;
       font-size: 14px;
-      margin-top: 8px;
     }
 
-    button:hover {
-      background: #1558be;
+    .btn {
+      cursor: pointer;
+      font-weight: 600;
+      transition: 0.15s ease;
     }
 
-    button.secondary {
-      background: #666;
+    .btn:hover {
+      transform: translateY(-1px);
     }
 
-    button.secondary:hover {
-      background: #4f4f4f;
+    .btn.primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    .btn.primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn.danger {
+      background: var(--danger);
+      color: #fff;
+      border-color: var(--danger);
+    }
+
+    .btn.danger:hover {
+      background: var(--danger-hover);
+    }
+
+    .btn.success {
+      background: var(--ok);
+      color: #fff;
+      border-color: var(--ok);
+    }
+
+    .file-hidden {
+      display: none;
     }
 
     #map {
       width: 100%;
-      height: 100%;
+      height: calc(100vh - 60px);
     }
 
-    #status {
+    .status {
+      position: absolute;
+      top: 72px;
+      left: 12px;
+      z-index: 900;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: var(--shadow);
       font-size: 13px;
-      color: #333;
-      line-height: 1.5;
-      white-space: pre-line;
+      min-width: 250px;
+      max-width: 360px;
     }
 
-    #attributes {
+    .status strong {
+      display: block;
+      margin-bottom: 4px;
       font-size: 13px;
-      line-height: 1.5;
-      color: #222;
-      word-break: break-word;
     }
 
-    #attributes table {
+    .status .muted {
+      color: var(--muted);
+    }
+
+    .table-panel {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 950;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: none;
+      max-height: 42vh;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #f9fafb;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: calc(42vh - 52px);
+    }
+
+    table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 6px;
+      font-size: 12px;
     }
 
-    #attributes th,
-    #attributes td {
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 6px 8px;
       text-align: left;
-      border: 1px solid #ddd;
-      padding: 6px;
       vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f3f4f6;
+      z-index: 1;
+    }
+
+    .leaflet-popup-content {
+      max-width: 280px;
+      max-height: 220px;
+      overflow: auto;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .hint {
+      color: var(--muted);
       font-size: 12px;
     }
 
-    .small {
-      font-size: 12px;
-      color: #666;
-    }
-
-    @media (max-width: 900px) {
-      #app {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
+    @media (max-width: 720px) {
+      .topbar {
+        gap: 6px;
       }
 
-      #sidebar {
-        max-height: 42vh;
-        border-right: none;
-        border-bottom: 1px solid #ddd;
+      .btn, .select {
+        font-size: 13px;
+        height: 36px;
+      }
+
+      .status {
+        top: 120px;
+        max-width: calc(100vw - 24px);
+      }
+
+      #map {
+        height: calc(100vh - 108px);
       }
     }
   </style>
 </head>
 <body>
-  <div id="app">
-    <aside id="sidebar">
-      <h1>Visualizador de Shapefile</h1>
-      <p>
-        Carregue um shapefile compactado em <strong>.zip</strong>. O mapa base usa
-        <strong>OpenStreetMap</strong>.
-      </p>
+  <div class="topbar">
+    <div class="title">GIS Web</div>
 
-      <div class="card">
-        <label for="fileInput">Arquivo ZIP do shapefile</label>
-        <input type="file" id="fileInput" accept=".zip" />
-        <button id="loadBtn">Carregar shapefile</button>
-        <button id="clearBtn" class="secondary">Limpar camada</button>
-        <p class="small" style="margin-top: 10px;">
-          Dica: compacte juntos os arquivos do shapefile, como <code>.shp</code>,
-          <code>.dbf</code>, <code>.shx</code> e <code>.prj</code>.
-        </p>
-      </div>
+    <input type="file" id="fileInput" class="file-hidden" accept=".zip" />
 
-      <div class="card">
-        <strong>Status</strong>
-        <div id="status" style="margin-top: 8px;">Aguardando arquivo...</div>
-      </div>
+    <button class="btn primary" id="openBtn">Abrir ZIP</button>
+    <button class="btn" id="zoomBtn">Zoom na camada</button>
+    <button class="btn" id="tableBtn">Tabela</button>
+    <button class="btn danger" id="clearBtn">Limpar</button>
 
-      <div class="card">
-        <strong>Atributos da feição</strong>
-        <div id="attributes" style="margin-top: 8px;">Clique em uma feição no mapa.</div>
-      </div>
-    </aside>
+    <select id="styleSelect" class="select" title="Estilo da camada">
+      <option value="default">Visual padrão</option>
+      <option value="outline">Somente contorno</option>
+      <option value="strong">Destaque forte</option>
+      <option value="points">Pontos fortes</option>
+    </select>
 
-    <main id="map"></main>
+    <div class="spacer"></div>
+    <div class="hint">ZIP com .shp + .dbf + .shx + .prj</div>
   </div>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+  <div id="map"></div>
+
+  <div class="status" id="statusBox">
+    <strong>Status</strong>
+    <div id="statusText" class="muted">Pronto para abrir um shapefile ZIP.</div>
+  </div>
+
+  <div class="table-panel" id="tablePanel">
+    <div class="table-header">
+      <strong>Tabela de atributos</strong>
+      <button class="btn" id="closeTableBtn">Fechar</button>
+    </div>
+    <div class="table-wrap" id="tableWrap"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
 
-  <script>
-    const map = L.map('map').setView([-14.235, -51.9253], 4);
+  <!-- Google Maps JS API: troque SUA_CHAVE_GOOGLE pela sua chave -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=SUA_CHAVE_GOOGLE" async defer></script>
+  <script src="https://unpkg.com/leaflet.gridlayer.googlemutant@latest/Leaflet.GoogleMutant.js"></script>
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
+  <script>
+    const statusText = document.getElementById("statusText");
+    const fileInput = document.getElementById("fileInput");
+    const openBtn = document.getElementById("openBtn");
+    const zoomBtn = document.getElementById("zoomBtn");
+    const tableBtn = document.getElementById("tableBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const styleSelect = document.getElementById("styleSelect");
+    const tablePanel = document.getElementById("tablePanel");
+    const tableWrap = document.getElementById("tableWrap");
+    const closeTableBtn = document.getElementById("closeTableBtn");
+
+    const map = L.map("map", {
+      zoomControl: true,
+      preferCanvas: true
+    }).setView([-14.235, -51.9253], 4);
+
+    const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 20,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    let googleSatellite = null;
+    try {
+      googleSatellite = L.gridLayer.googleMutant({
+        type: "satellite",
+        maxZoom: 21
+      });
+    } catch (e) {
+      console.warn("Google Satellite não pôde ser iniciado:", e);
+    }
+
+    const baseMaps = {
+      "OSM": osm
+    };
+
+    if (googleSatellite) {
+      baseMaps["Google Satellite"] = googleSatellite;
+    }
+
+    const overlayMaps = {};
+    const layersControl = L.control.layers(baseMaps, overlayMaps, {
+      collapsed: false
     }).addTo(map);
 
     let currentLayer = null;
+    let currentGeoJSON = null;
+    let currentFileName = "";
+    let attributeRows = [];
 
-    const fileInput = document.getElementById('fileInput');
-    const loadBtn = document.getElementById('loadBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const statusEl = document.getElementById('status');
-    const attributesEl = document.getElementById('attributes');
-
-    function setStatus(message) {
-      statusEl.textContent = message;
+    function setStatus(msg) {
+      statusText.textContent = msg;
     }
 
-    function clearAttributes() {
-      attributesEl.innerHTML = 'Clique em uma feição no mapa.';
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
     }
 
-    function renderProperties(properties) {
+    function popupHtml(properties) {
       const entries = Object.entries(properties || {});
+      if (!entries.length) return "<em>Sem atributos</em>";
 
-      if (!entries.length) {
-        attributesEl.innerHTML = 'Esta feição não possui atributos.';
-        return;
-      }
-
-      let html = '<table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>';
-      for (const [key, value] of entries) {
-        html += `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(String(value ?? ''))}</td></tr>`;
-      }
-      html += '</tbody></table>';
-      attributesEl.innerHTML = html;
+      return entries
+        .map(([k, v]) => `<strong>${escapeHtml(k)}</strong>: ${escapeHtml(v)}`)
+        .join("<br>");
     }
 
-    function escapeHtml(text) {
-      return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
+    function getVectorStyle(geomType, mode) {
+      const isLine = geomType === "LineString" || geomType === "MultiLineString";
+      const isPoly = geomType === "Polygon" || geomType === "MultiPolygon";
 
-    function getStyle(geometryType) {
-      switch (geometryType) {
-        case 'Polygon':
-        case 'MultiPolygon':
-          return {
-            color: '#ff7800',
-            weight: 2,
-            fillOpacity: 0.35
-          };
-        case 'LineString':
-        case 'MultiLineString':
-          return {
-            color: '#0055ff',
-            weight: 3
-          };
-        default:
-          return {
-            color: '#d11',
-            weight: 2
-          };
+      if (mode === "outline") {
+        return {
+          color: "#ef4444",
+          weight: isLine ? 3 : 2,
+          fillOpacity: 0,
+          opacity: 1
+        };
       }
+
+      if (mode === "strong") {
+        return {
+          color: "#111827",
+          weight: isLine ? 4 : 3,
+          fillColor: "#f59e0b",
+          fillOpacity: isPoly ? 0.55 : 0,
+          opacity: 1
+        };
+      }
+
+      return {
+        color: "#2563eb",
+        weight: isLine ? 3 : 2,
+        fillColor: "#60a5fa",
+        fillOpacity: isPoly ? 0.35 : 0,
+        opacity: 1
+      };
     }
 
-    function pointToLayer(feature, latlng) {
-      return L.circleMarker(latlng, {
+    function pointStyle(mode) {
+      if (mode === "points") {
+        return {
+          radius: 8,
+          color: "#111827",
+          weight: 2,
+          fillColor: "#22c55e",
+          fillOpacity: 0.95
+        };
+      }
+
+      if (mode === "strong") {
+        return {
+          radius: 7,
+          color: "#111827",
+          weight: 2,
+          fillColor: "#f59e0b",
+          fillOpacity: 0.95
+        };
+      }
+
+      if (mode === "outline") {
+        return {
+          radius: 6,
+          color: "#ef4444",
+          weight: 2,
+          fillColor: "#ffffff",
+          fillOpacity: 0.85
+        };
+      }
+
+      return {
         radius: 6,
-        fillColor: '#e63946',
-        color: '#8d1b24',
+        color: "#1d4ed8",
         weight: 1,
-        opacity: 1,
-        fillOpacity: 0.85
-      });
+        fillColor: "#60a5fa",
+        fillOpacity: 0.9
+      };
     }
 
-    function onEachFeature(feature, layer) {
-      layer.on('click', () => {
-        renderProperties(feature.properties);
-      });
-
-      const props = feature.properties || {};
-      const preview = Object.entries(props)
-        .slice(0, 4)
-        .map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v ?? ''))}`)
-        .join('<br>');
-
-      if (preview) {
-        layer.bindPopup(preview);
+    function featureCount(geojson) {
+      if (Array.isArray(geojson)) {
+        return geojson.reduce((sum, item) => sum + (item.features?.length || 0), 0);
       }
+      return geojson?.features?.length || 0;
     }
 
-    async function loadShapefile() {
-      const file = fileInput.files[0];
+    function flattenGeoJSON(input) {
+      if (Array.isArray(input)) {
+        const features = input.flatMap(item => item.features || []);
+        return {
+          type: "FeatureCollection",
+          features
+        };
+      }
 
-      if (!file) {
-        setStatus('Selecione um arquivo .zip primeiro.');
+      if (input?.type === "FeatureCollection") return input;
+
+      return {
+        type: "FeatureCollection",
+        features: []
+      };
+    }
+
+    function buildTable(rows) {
+      tableWrap.innerHTML = "";
+
+      if (!rows.length) {
+        tableWrap.innerHTML = "<div style='padding:12px'>Sem atributos para exibir.</div>";
         return;
       }
 
-      clearAttributes();
-      setStatus('Lendo arquivo...');
+      const cols = [...new Set(rows.flatMap(obj => Object.keys(obj)))];
 
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const geojson = await shp(arrayBuffer);
+      let html = "<table><thead><tr>";
+      html += "<th>#</th>";
+      cols.forEach(col => {
+        html += `<th>${escapeHtml(col)}</th>`;
+      });
+      html += "</tr></thead><tbody>";
 
-        if (currentLayer) {
-          map.removeLayer(currentLayer);
-        }
+      rows.forEach((row, idx) => {
+        html += "<tr>";
+        html += `<td>${idx + 1}</td>`;
+        cols.forEach(col => {
+          html += `<td>${escapeHtml(row[col] ?? "")}</td>`;
+        });
+        html += "</tr>";
+      });
 
-        currentLayer = L.geoJSON(geojson, {
-          style: feature => getStyle(feature.geometry?.type),
-          pointToLayer,
-          onEachFeature
-        }).addTo(map);
-
-        const bounds = currentLayer.getBounds();
-        if (bounds.isValid()) {
-          map.fitBounds(bounds, { padding: [20, 20] });
-        }
-
-        const featureCount = countFeatures(geojson);
-        setStatus(`Shapefile carregado com sucesso.\nFeições: ${featureCount}`);
-      } catch (error) {
-        console.error(error);
-        setStatus('Erro ao carregar o shapefile. Verifique se o ZIP está correto e contém os arquivos necessários.');
-      }
+      html += "</tbody></table>";
+      tableWrap.innerHTML = html;
     }
 
-    function countFeatures(geojson) {
-      if (Array.isArray(geojson)) {
-        return geojson.reduce((sum, item) => sum + (item.features ? item.features.length : 0), 0);
-      }
-      return geojson.features ? geojson.features.length : 0;
-    }
-
-    function clearLayer() {
+    function clearCurrentLayer() {
       if (currentLayer) {
         map.removeLayer(currentLayer);
-        currentLayer = null;
+        try {
+          layersControl.removeLayer(currentLayer);
+        } catch (e) {}
       }
-      fileInput.value = '';
-      clearAttributes();
-      setStatus('Camada removida.');
+
+      if (currentFileName && overlayMaps[currentFileName]) {
+        delete overlayMaps[currentFileName];
+      }
+
+      currentLayer = null;
+      currentGeoJSON = null;
+      currentFileName = "";
+      attributeRows = [];
+      tableWrap.innerHTML = "";
+      tablePanel.style.display = "none";
+      setStatus("Camada removida.");
     }
 
-    loadBtn.addEventListener('click', loadShapefile);
-    clearBtn.addEventListener('click', clearLayer);
+    function applyCurrentStyle() {
+      if (!currentLayer || !currentGeoJSON) return;
+
+      const mode = styleSelect.value;
+
+      currentLayer.eachLayer(layer => {
+        const feature = layer.feature;
+        const geomType = feature?.geometry?.type;
+
+        if (layer.setStyle) {
+          layer.setStyle(getVectorStyle(geomType, mode));
+        }
+
+        if (layer.setRadius && geomType && (geomType.includes("Point"))) {
+          const st = pointStyle(mode);
+          layer.setStyle?.(st);
+          layer.setRadius(st.radius);
+        }
+      });
+    }
+
+    function renderLayer(geojson, fileName) {
+      clearCurrentLayer();
+
+      currentGeoJSON = flattenGeoJSON(geojson);
+      currentFileName = fileName;
+      attributeRows = currentGeoJSON.features.map(f => f.properties || {});
+      buildTable(attributeRows);
+
+      const mode = styleSelect.value;
+
+      currentLayer = L.geoJSON(currentGeoJSON, {
+        style: feature => getVectorStyle(feature.geometry?.type, mode),
+        pointToLayer: (feature, latlng) => L.circleMarker(latlng, pointStyle(mode)),
+        onEachFeature: (feature, layer) => {
+          layer.bindPopup(popupHtml(feature.properties));
+
+          layer.on("click", () => {
+            if (tablePanel.style.display === "block") {
+              const props = feature.properties || {};
+              const cols = [...new Set(attributeRows.flatMap(obj => Object.keys(obj)))];
+              const idx = attributeRows.findIndex(row => JSON.stringify(row) === JSON.stringify(props));
+
+              if (idx >= 0) {
+                const rows = tableWrap.querySelectorAll("tbody tr");
+                rows.forEach(r => r.style.background = "");
+                if (rows[idx]) {
+                  rows[idx].style.background = "#dbeafe";
+                  rows[idx].scrollIntoView({ behavior: "smooth", block: "nearest" });
+                }
+              }
+            }
+          });
+        }
+      }).addTo(map);
+
+      overlayMaps[fileName] = currentLayer;
+      layersControl.addOverlay(currentLayer, fileName);
+
+      const bounds = currentLayer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [20, 20] });
+      }
+
+      setStatus(`Arquivo carregado: ${fileName} | Feições: ${featureCount(currentGeoJSON)}`);
+    }
+
+    async function openZipShapefile(file) {
+      if (!file) return;
+
+      setStatus("Lendo ZIP do shapefile...");
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const geojson = await shp(buffer);
+        renderLayer(geojson, file.name);
+      } catch (err) {
+        console.error(err);
+        setStatus("Erro ao abrir o ZIP. Verifique se contém .shp, .dbf e os demais arquivos do shapefile.");
+      }
+    }
+
+    openBtn.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      openZipShapefile(file);
+    });
+
+    zoomBtn.addEventListener("click", () => {
+      if (!currentLayer) {
+        setStatus("Nenhuma camada carregada.");
+        return;
+      }
+
+      const bounds = currentLayer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [20, 20] });
+      }
+    });
+
+    tableBtn.addEventListener("click", () => {
+      if (!attributeRows.length) {
+        setStatus("Nenhuma tabela disponível.");
+        return;
+      }
+
+      tablePanel.style.display = tablePanel.style.display === "block" ? "none" : "block";
+    });
+
+    closeTableBtn.addEventListener("click", () => {
+      tablePanel.style.display = "none";
+    });
+
+    clearBtn.addEventListener("click", () => {
+      clearCurrentLayer();
+      fileInput.value = "";
+    });
+
+    styleSelect.addEventListener("change", applyCurrentStyle);
+
+    // Drag & drop simples
+    map.getContainer().addEventListener("dragover", (e) => {
+      e.preventDefault();
+    });
+
+    map.getContainer().addEventListener("drop", (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files?.[0];
+      if (file && file.name.toLowerCase().endsWith(".zip")) {
+        openZipShapefile(file);
+      } else {
+        setStatus("Solte um arquivo .zip de shapefile.");
+      }
+    });
   </script>
 </body>
 </html>
